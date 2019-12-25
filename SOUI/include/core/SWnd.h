@@ -39,10 +39,6 @@
 #define ICWND_FIRST    ((SWindow*)-1)   /*子窗口插入在开头*/
 #define ICWND_LAST    NULL              /*子窗口插入在末尾*/
 
-#define UM_SETSCALE		 (WM_USER+1000)
-#define UM_SETLANGUAGE   (WM_USER+1001)
-#define UM_SETCOLORIZE	 (WM_USER+1002)
-
 #ifdef _DEBUG
 #define ASSERT_UI_THREAD() SOUI::SWindow::TestMainThread()
 #else 
@@ -55,7 +51,12 @@ namespace SOUI
     /////////////////////////////////////////////////////////////////////////
     enum {NormalShow=0,ParentShow=1};    //提供WM_SHOWWINDOW消息识别是父窗口显示还是要显示本窗口
     enum {NormalEnable=0,ParentEnable=1};    //提供WM_ENABLE消息识别是父窗口可用还是直接操作当前窗口
-
+	enum{
+		UM_SETSCALE = (WM_USER+1000),
+		UM_SETLANGUAGE,
+		UM_SETCOLORIZE,
+		UM_UPDATEFONT,
+	};
 	// State Define
 	enum WndState
 	{
@@ -697,7 +698,7 @@ namespace SOUI
         *
         * Describe  遍历所有子窗口发送消息
         */
-        void SDispatchMessage(UINT uMsg,WPARAM wParam,LPARAM lParam);
+        void SDispatchMessage(UINT uMsg,WPARAM wParam=0,LPARAM lParam=0);
 
         /**
         * GetCurMsg
@@ -784,6 +785,18 @@ namespace SOUI
         */
         BOOL GetWindowRgn(IRegion *pRgn);
         
+		/**
+        * SetClipPath
+        * @brief    设置窗口Path
+        * @param    IPath *pPath --  有效区域,区域左上角坐标为(0,0)
+        * @param    BOOL bRedraw -- 重绘标志
+        * @return   void 
+        *
+        * Describe 
+        */
+		void SetClipPath(IPath *pPath,BOOL bRedraw=TRUE);
+
+		
         /**
         * SetTimer
         * @brief    利用窗口定时器来设置一个ID为0-127的SWND定时器
@@ -1058,8 +1071,8 @@ namespace SOUI
         /**
         * BeforePaint
         * @brief    为RT准备好当前窗口的绘图环境
-        * @param    IRenderTarget * pRT --  
-        * @param    SPainter & painter --  
+        * @param    IRenderTarget * pRT --  渲染RT
+        * @param    SPainter & painter --  painter storage
         * @return   void 
         *
         * Describe  
@@ -1069,15 +1082,23 @@ namespace SOUI
         /**
         * AfterPaint
         * @brief    恢复由BeforePaint设置的RT状态
-        * @param    IRenderTarget * pRT --  
-        * @param    SPainter & painter --  
+        * @param    IRenderTarget * pRT --  渲染RT
+        * @param    SPainter & painter --  painter storage
         * @return   void 
         *
         * Describe  
         */
         virtual void AfterPaint(IRenderTarget *pRT, SPainter &painter);
         
+		/**
+		* GetTrCtx
+		* @brief    Get Translator Context for The Window
+		* @return   SStringW, Translator Context for The Window
+		*
+		* Describe
+		*/
 		virtual const SStringW & GetTrCtx() const;
+
     public://caret相关方法
         virtual BOOL CreateCaret(HBITMAP pBmp,int nWid,int nHeight);
         virtual void ShowCaret(BOOL bShow);   
@@ -1238,6 +1259,19 @@ namespace SOUI
          */    
         virtual BOOL IsLayeredWindow() const;
     
+		/**
+		* DispatchPaint
+		* @brief    
+		* @param    IRenderTarget * pRT -- 渲染RT
+		* @param    IRegion *pRgn -- paint region
+		* @param    UINT iBeginZorder -- begin zorder
+		* @param    UINT iEndZorder -- end zorder
+		* @return   void
+		*
+		* Describe
+		*/
+		virtual void DispatchPaint(IRenderTarget *pRT, IRegion *pRgn,UINT iZorderBegin,UINT iZorderEnd);
+
     protected://helper functions
 
 		SWindow* _FindChildByID(int nID, int nDeep);
@@ -1264,7 +1298,8 @@ namespace SOUI
         void _PaintNonClient(IRenderTarget *pRT);
 		void _RedrawNonClient();
         void _PaintRegion(IRenderTarget *pRT, IRegion *pRgn,UINT iZorderBegin,UINT iZorderEnd);
-		void _PaintRegion2(IRenderTarget *pRT, IRegion *pRgn,UINT iZorderBegin,UINT iZorderEnd);
+		
+		void _PaintChildren(IRenderTarget *pRT, IRegion *pRgn, UINT iBeginZorder, UINT iEndZorder);
 
         void DrawDefFocusRect(IRenderTarget *pRT,CRect rc);
         
@@ -1329,6 +1364,7 @@ namespace SOUI
 		LRESULT OnSetScale(UINT uMsg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnSetLanguage(UINT uMsg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnSetColorize(UINT uMsg, WPARAM wParam, LPARAM lParam);
+		LRESULT OnUpdateFont(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
         SOUI_MSG_MAP_BEGIN()
             MSG_WM_PAINT_EX(OnPaint)
@@ -1352,6 +1388,7 @@ namespace SOUI
 			MESSAGE_HANDLER_EX(UM_SETLANGUAGE,OnSetLanguage)
 			MESSAGE_HANDLER_EX(UM_SETSCALE,OnSetScale)
 			MESSAGE_HANDLER_EX(UM_SETCOLORIZE,OnSetColorize)
+			MESSAGE_HANDLER_EX(UM_UPDATEFONT,OnUpdateFont)
         WND_MSG_MAP_END_BASE()  //消息不再往基类传递，此外使用WND_MSG_MAP_END_BASE而不是WND_MSG_MAP_END
 
     protected:
@@ -1410,6 +1447,8 @@ namespace SOUI
 		virtual HRESULT OnLanguageChanged();
 
 		virtual void OnScaleChanged(int scale);
+		
+		virtual void OnRebuildFont();
 
 		virtual void OnInsertChild(SWindow *pChild) {}
 
@@ -1469,7 +1508,8 @@ namespace SOUI
 
 		LayoutDirtyType     m_layoutDirty;      /**< 布局脏标志 参见LayoutDirtyType */
         SAutoRefPtr<IRenderTarget> m_cachedRT;  /**< 缓存窗口绘制的RT */
-        SAutoRefPtr<IRegion>       m_rgnWnd;    /**< 窗口Region */
+        SAutoRefPtr<IRegion>       m_clipRgn;    /**< 窗口Region */
+		SAutoRefPtr<IPath>		   m_clipPath;  /**< 窗口Path */
         ISkinObj *          m_pBgSkin;          /**< 背景skin */
         ISkinObj *          m_pNcSkin;          /**< 非客户区skin */
         ULONG_PTR           m_uData;            /**< 窗口的数据位,可以通过GetUserData获得 */

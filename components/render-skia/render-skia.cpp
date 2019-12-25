@@ -954,6 +954,7 @@ namespace SOUI
         SkPaint paint;
 		SetPaintXferMode(paint,m_xferMode);
         paint.setShader(pShader)->unref();
+		paint.setAntiAlias(m_bAntiAlias);
 
         m_SkCanvas->drawRect(skrc,paint);
 
@@ -1049,6 +1050,7 @@ namespace SOUI
 		SkPaint paint;
 		SetPaintXferMode(paint,m_xferMode);
 		paint.setShader(pShader)->unref();
+		paint.setAntiAlias(m_bAntiAlias);
 
 		SkPoint skOffset = {skrc.left(),skrc.top()};
 
@@ -1086,6 +1088,7 @@ namespace SOUI
 		SetPaintXferMode(paint,m_xferMode);
         paint.setShader(pShader);
         pShader->unref();
+		paint.setAntiAlias(m_bAntiAlias);
 
         m_SkCanvas->drawRect(skrc,paint);
         return S_OK;
@@ -1098,7 +1101,8 @@ namespace SOUI
 		SetPaintXferMode(paint,m_xferMode);
         paint.setStyle(SkPaint::kFill_Style);
         paint.setColor(SColor(cr).toARGB());
-        
+		paint.setAntiAlias(m_bAntiAlias);
+      
         SkRect skrc=toSkRect(pRect);
         skrc.offset(m_ptOrg);
         m_SkCanvas->drawRect(skrc,paint);
@@ -1229,6 +1233,7 @@ namespace SOUI
         paint.setStyle(SkPaint::kFill_Style);
 		SetPaintXferMode(paint,m_xferMode);
 
+		paint.setAntiAlias(m_bAntiAlias);
         SkRect skrc=toSkRect(pRect);
         skrc.offset(m_ptOrg);
         m_SkCanvas->drawArc(skrc,startAngle, sweepAngle,true,paint);
@@ -1303,7 +1308,7 @@ namespace SOUI
 		return crRet;
 	}
 
-	HRESULT SRenderTarget_Skia::ClipPath(const IPath * path, UINT mode, bool doAntiAlias /*= false*/)
+	HRESULT SRenderTarget_Skia::PushClipPath(const IPath * path, UINT mode, bool doAntiAlias /*= false*/)
 	{
 		const SPath_Skia * path2 = (const SPath_Skia *)path;
 		m_SkCanvas->clipPath(path2->m_skPath,SRegion_Skia::RGNMODE2SkRgnOP(mode),doAntiAlias);

@@ -1,9 +1,5 @@
 #include <souistd.h>
 #include <helper/STaskHandler.h>
-#include <algorithm>
-#include <cassert>
-#include <deque>
-#include <limits>
 
 namespace SOUI
 {
@@ -92,7 +88,7 @@ namespace SOUI
 	{
 		if (!isRunning())
 			return false;
-		GetWindowTextA(m_hWnd,pszBuf,nBufLen);
+		::GetWindowTextA(m_hWnd,pszBuf,nBufLen);
 		return true;
 	}
 

@@ -1333,7 +1333,14 @@ void SRichEdit::ReplaceSel(LPCWSTR pszText,BOOL bCanUndo)
 
 void SRichEdit::SetSel(DWORD dwSelection, BOOL bNoScroll)
 {
-    SSendMessage(EM_SETSEL, LOWORD(dwSelection), HIWORD(dwSelection));
+	SSendMessage(EM_SETSEL, LOWORD(dwSelection), HIWORD(dwSelection));
+	if (!bNoScroll)
+		SSendMessage(EM_SCROLLCARET, 0, 0L);
+}
+	
+void SRichEdit::SetSel(long nStartChar, long nEndChar, BOOL bNoScroll)
+{
+    SSendMessage(EM_SETSEL, nStartChar, nEndChar);
     if(!bNoScroll)
         SSendMessage(EM_SCROLLCARET, 0, 0L);
 }
@@ -1532,6 +1539,12 @@ void SRichEdit::OnScaleChanged(int nScale)
 	OnSetFont(NULL,FALSE);//更新默认字体
 }
 
+void SRichEdit::OnRebuildFont()
+{
+	__super::OnRebuildFont();
+	OnSetFont(NULL,FALSE);//更新默认字体
+}
+
 void SRichEdit::OnEnable(BOOL bEnable, UINT nStatus)
 {
 	__super::OnEnable(bEnable, nStatus);
@@ -1693,6 +1706,7 @@ HRESULT SRichEdit::OnAttrAutoSel(const SStringW & strValue,BOOL bLoading)
 	m_fAutoSel = STRINGASBOOL(strValue);
 	return S_FALSE;
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 

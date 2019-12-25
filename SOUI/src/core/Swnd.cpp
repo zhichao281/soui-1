@@ -981,31 +981,13 @@ namespace SOUI
 			if(pRTCache)
 			{
 				SSendMessage(WM_NCPAINT, (WPARAM)pRTCache);
-				int nSave =-1;
-				pRT->SaveClip(&nSave);
 				pRT->PushClipRect(&rcClient,RGN_DIFF);
-				if(m_rgnWnd)
-				{
-					m_rgnWnd->Offset(rcWnd.TopLeft());
-					pRT->PushClipRegion(m_rgnWnd);
-					m_rgnWnd->Offset(-rcWnd.TopLeft());
-				}
 				pRT->AlphaBlend(rcWnd,pRTCache,rcWnd,255);
-				pRT->RestoreClip(nSave);
+				pRT->PopClip();
 			}
 		}else
 		{
-			if(m_rgnWnd)
-			{
-				m_rgnWnd->Offset(rcWnd.TopLeft());
-				pRT->PushClipRegion(m_rgnWnd);
-				m_rgnWnd->Offset(-rcWnd.TopLeft());
-			}
 			SSendMessage(WM_NCPAINT, (WPARAM)pRT);
-			if(m_rgnWnd)
-			{
-				pRT->PopClip();
-			}
 		}
 	}
 
@@ -1017,15 +999,21 @@ namespace SOUI
 		CRect rcClient = SWindow::GetClientRect();
 		rgn->CombineRect(&rcWnd,RGN_COPY);
 		rgn->CombineRect(&rcClient,RGN_DIFF);
-		if(m_rgnWnd)
+		if(m_clipRgn)
 		{
-			m_rgnWnd->Offset(GetWindowRect().TopLeft());
-			rgn->CombineRgn(m_rgnWnd,RGN_AND);
-			m_rgnWnd->Offset(-GetWindowRect().TopLeft());
+			m_clipRgn->Offset(GetWindowRect().TopLeft());
+			rgn->CombineRgn(m_clipRgn,RGN_AND);
+			m_clipRgn->Offset(-GetWindowRect().TopLeft());
 		}
 		if (!rgn->IsEmpty())
 		{
 			IRenderTarget *pRT = GetRenderTarget(GRT_OFFSCREEN, rgn);//不自动画背景
+			if(m_clipPath)
+			{
+				m_clipPath->offset((float)rcWnd.left,(float)rcWnd.top);
+				pRT->PushClipPath(m_clipPath,RGN_AND,true);
+				m_clipPath->offset(-(float)rcWnd.left,-(float)rcWnd.top);
+			}
 			PaintBackground(pRT, &rcWnd);
 			SSendMessage(WM_NCPAINT, (WPARAM)pRT);
 			PaintForeground(pRT, &rcWnd);
@@ -1082,8 +1070,44 @@ namespace SOUI
 		return RgnInRgn(rgn, rgn2);
 	}
 
+
+	void SWindow::_PaintChildren(IRenderTarget * pRT, IRegion *pRgn, UINT iBeginZorder, UINT iEndZorder) {
+		SWindow *pChild = GetWindow(GSW_FIRSTCHILD);
+		while (pChild)
+		{
+			if (pChild->m_uZorder >= iEndZorder) break;
+			if (pChild->m_uZorder< iBeginZorder)
+			{//看整个分枝的zorder是不是在绘制范围内
+				SWindow *pNextChild = pChild->GetWindow(GSW_NEXTSIBLING);
+				if (pNextChild)
+				{
+					if (pNextChild->m_uZorder <= iBeginZorder)
+					{
+						pChild = pNextChild;
+						continue;
+					}
+				}
+				else
+				{//最后一个节点时查看最后子窗口的zorder
+					SWindow *pLastChild = pChild;
+					while (pLastChild->GetChildrenCount())
+					{
+						pLastChild = pLastChild->GetWindow(GSW_LASTCHILD);
+					}
+					if (pLastChild->m_uZorder < iBeginZorder)
+					{
+						break;
+					}
+				}
+			}
+
+			pChild->DispatchPaint(pRT, pRgn, iBeginZorder, iEndZorder);
+			pChild = pChild->GetWindow(GSW_NEXTSIBLING);
+		}
+	}
+
 	//paint zorder in [iZorderBegin,iZorderEnd) widnows
-	void SWindow::_PaintRegion2( IRenderTarget *pRT, IRegion *pRgn,UINT iZorderBegin,UINT iZorderEnd )
+	void SWindow::DispatchPaint( IRenderTarget *pRT, IRegion *pRgn,UINT iZorderBegin,UINT iZorderEnd )
 	{
 		if(!IsVisible(FALSE))
 			return;
@@ -1119,12 +1143,24 @@ namespace SOUI
 			pRT->SetTextColor(pRTBackup->GetTextColor());
 			pRT->ClearRect(&rcWnd,0);
 		}
-		if(m_rgnWnd)
+		//save clip state
+		int nSave1=-1;
+		pRT->SaveClip(&nSave1);
+		if(m_clipRgn)
 		{
-			m_rgnWnd->Offset(GetWindowRect().TopLeft());
-			pRT->PushClipRegion(m_rgnWnd,RGN_AND);
-			m_rgnWnd->Offset(-GetWindowRect().TopLeft());
+			m_clipRgn->Offset(rcWnd.TopLeft());
+			pRT->PushClipRegion(m_clipRgn,RGN_AND);
+			m_clipRgn->Offset(-rcWnd.TopLeft());
 		}
+		if(m_clipPath)
+		{
+			m_clipPath->offset((float)rcWnd.left,(float)rcWnd.top);
+			pRT->PushClipPath(m_clipPath,RGN_AND,true);
+			m_clipPath->offset(-(float)rcWnd.left,-(float)rcWnd.top);
+		}
+		int nSave2=-1;
+		pRT->SaveClip(&nSave2);
+
 		if(IsClipClient())
 		{
 			pRT->PushClipRect(rcClient);
@@ -1149,51 +1185,11 @@ namespace SOUI
 		{
 			pRT->PushClipRect(rcText);
 		}
-		SWindow *pChild = GetWindow(GSW_FIRSTCHILD);
-		while(pChild)
-		{
-			if(pChild->m_uZorder >= iZorderEnd) break;
-			if(pChild->m_uZorder< iZorderBegin)
-			{//看整个分枝的zorder是不是在绘制范围内
-				SWindow *pNextChild = pChild->GetWindow(GSW_NEXTSIBLING);
-				if(pNextChild)
-				{
-					if(pNextChild->m_uZorder<=iZorderBegin)
-					{
-						pChild = pNextChild;
-						continue;
-					}
-				}else
-				{//最后一个节点时查看最后子窗口的zorder
-					SWindow *pLastChild = pChild;
-					while(pLastChild->GetChildrenCount())
-					{
-						pLastChild = pLastChild->GetWindow(GSW_LASTCHILD);
-					}
-					if(pLastChild->m_uZorder < iZorderBegin)
-					{
-						break;
-					}
-				}
-			}
-
-			pChild->_PaintRegion2(pRT, pRgn, iZorderBegin, iZorderEnd);
-			pChild = pChild->GetWindow(GSW_NEXTSIBLING);
-		}
+		
+		_PaintChildren(pRT,pRgn,iZorderBegin,iZorderEnd);
 		AfterPaint(pRT,painter);
+		pRT->RestoreClip(nSave2);
 
-		if(rcText != rcClient && IsClipClient())
-		{
-			pRT->PopClip();
-		}
-		if(IsClipClient())
-		{
-			pRT->PopClip();
-		}
-		if(m_rgnWnd)
-		{
-			pRT->PopClip();
-		}
 		if(m_uZorder >= iZorderBegin
 			&& m_uZorder < iZorderEnd 
 			&& !bRgnInClient
@@ -1202,6 +1198,8 @@ namespace SOUI
 		{//paint nonclient
 			_PaintNonClient(pRT);
 		}
+		//restore clip state.
+		pRT->RestoreClip(nSave1);
 
 		if(IsLayeredWindow())
 		{//将绘制到窗口的缓存上的图像返回到上一级RT
@@ -1256,7 +1254,7 @@ namespace SOUI
 		if (!IsVisible(TRUE))
 			return;
 		BeforePaintEx(pRT);
-		_PaintRegion2(pRT,pRgn,iZorderBegin,iZorderEnd);
+		DispatchPaint(pRT,pRgn,iZorderBegin,iZorderEnd);
 	}
 
 	void SWindow::RedrawRegion(IRenderTarget *pRT, IRegion *pRgn)
@@ -1264,7 +1262,7 @@ namespace SOUI
 		ASSERT_UI_THREAD();
 		if (!IsVisible(TRUE))
 			return;
-		_PaintRegion2(pRT, pRgn, (UINT)ZORDER_MIN, (UINT)ZORDER_MAX);
+		DispatchPaint(pRT, pRgn, (UINT)ZORDER_MIN, (UINT)ZORDER_MAX);
 	}
 
 
@@ -1495,6 +1493,7 @@ namespace SOUI
 		m_pFirstChild=m_pLastChild=NULL;
 		m_nChildrenCount=0;
 		ClearAnimation();
+		m_style = SwndStyle();
 		m_isDestroying = false;
 	}
 
@@ -1513,28 +1512,16 @@ namespace SOUI
 		}
 		else
 		{
-			int nState=0;
-
-			if(GetState()&WndState_Disable)
-			{
-				nState=3;
-			}
-			else if(GetState()&WndState_Check || GetState()&WndState_PushDown)
-			{
-				nState=2;
-			}else if(GetState()&WndState_Hover)
-			{
-				nState=1;
-			}
-			if(nState>=m_pBgSkin->GetStates()) nState=0;
-			m_pBgSkin->DrawByIndex(pRT, rcClient, nState); 
+			int idx = SState2Index::GetDefIndex(GetState(),true);
+			if (idx >= m_pBgSkin->GetStates()) idx = 0;
+			m_pBgSkin->DrawByIndex(pRT, rcClient, idx);
 		}
 		return TRUE;
 	}
 
 	void SWindow::BeforePaint(IRenderTarget *pRT, SPainter &painter)
 	{
-		int iState = SState2Index::GetDefIndex(GetState());
+		int iState = SState2Index::GetDefIndex(GetState(),true);
 		IFontPtr pFont = GetStyle().GetTextFont(iState);
 		if(pFont) 
 			pRT->SelectObject(pFont,(IRenderObj**)&painter.oldFont);
@@ -2770,8 +2757,11 @@ namespace SOUI
 		return hr;
 	}
 
+
+
 	//////////////////////////////////////////////////////////////////////////
 	// caret functions
+
 
 	BOOL SWindow::CreateCaret(HBITMAP pBmp,int nWid,int nHeight)
 	{
@@ -2814,31 +2804,39 @@ namespace SOUI
 		BOOL bRet = FALSE;
 		CRect rc = bClientOnly ? GetClientRect() : GetWindowRect();
 		bRet = rc.PtInRect(pt);
-		if(m_rgnWnd)
+		if(m_clipRgn)
 		{
 			CPoint ptTmp = pt;
 			ptTmp -= GetWindowRect().TopLeft();
-			bRet = m_rgnWnd->PtInRegion(ptTmp);
+			bRet = m_clipRgn->PtInRegion(ptTmp);
 		}
 		return bRet;
 	}
 
 	void SWindow::SetWindowRgn(IRegion *pRgn,BOOL bRedraw/*=TRUE*/)
 	{
-		m_rgnWnd = NULL;
+		m_clipRgn = NULL;
 		if(pRgn)
 		{
-			GETRENDERFACTORY->CreateRegion(&m_rgnWnd);
-			m_rgnWnd->CombineRgn(pRgn,RGN_COPY);
+			GETRENDERFACTORY->CreateRegion(&m_clipRgn);
+			m_clipRgn->CombineRgn(pRgn,RGN_COPY);
 		}
 		if(bRedraw) InvalidateRect(NULL);
 	}
 
+
+	void SWindow::SetClipPath(IPath *pPath,BOOL bRedraw/*=TRUE*/)
+	{
+		m_clipPath = pPath;
+		if(bRedraw) InvalidateRect(NULL);
+	}
+
+
 	BOOL SWindow::GetWindowRgn(IRegion *pRgn)
 	{
 		SASSERT(pRgn);
-		if(!m_rgnWnd) return FALSE;
-		pRgn->CombineRgn(m_rgnWnd,RGN_COPY);
+		if(!m_clipRgn) return FALSE;
+		pRgn->CombineRgn(m_clipRgn,RGN_COPY);
 		return TRUE;
 	}
 
@@ -2868,6 +2866,12 @@ namespace SOUI
 		return m_crColorize;
 	}
 
+
+	LRESULT SWindow::OnUpdateFont(UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		OnRebuildFont();
+		return 0;
+	}
 
 	HRESULT SWindow::OnAttrLayout(const SStringW& strValue, BOOL bLoading)
 	{
@@ -2957,7 +2961,6 @@ namespace SOUI
 		return GetContainer()?GetContainer()->GetScale():100;
 	}
 
-
 	void SWindow::OnScaleChanged(int scale)
 	{
 		GetStyle().SetScale(scale);
@@ -2968,6 +2971,7 @@ namespace SOUI
 		m_layoutDirty = dirty_self;
 	}
 
+
 	void SWindow::GetScaleSkin(ISkinObj * &pSkin,int nScale)
 	{
 		if(!pSkin) return;
@@ -2977,6 +2981,11 @@ namespace SOUI
 			ISkinObj * pNewSkin =   GETSKIN(strName,nScale);
 			if(pNewSkin) pSkin = pNewSkin;
 		}
+	}
+
+	void SWindow::OnRebuildFont()
+	{
+		m_style.UpdateFont();
 	}
 
 	IAccessible * SWindow::GetAccessible()

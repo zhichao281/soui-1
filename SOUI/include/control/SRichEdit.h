@@ -672,7 +672,18 @@ namespace SOUI
         *
         * Describe   设置选中
         */
-        void SetSel(DWORD dwSelection, BOOL bNoScroll = FALSE);
+		void SetSel(DWORD dwSelection, BOOL bNoScroll = FALSE);
+
+		/**
+		* SRichEdit::SetSel
+		* @brief     设置选中
+		* @param     long nStartChar --
+		* @param     long nEndChar --
+		* @param     BOOL bNoScroll --
+		*
+		* Describe   设置选中, 支持超长文本
+		*/
+    	void SetSel(long nStartChar, long nEndChar, BOOL bNoScroll = FALSE);
         /**
         * SRichEdit::ReplaceSel
         * @brief     替换选中项
@@ -908,6 +919,8 @@ namespace SOUI
         virtual BOOL SwndProc(UINT uMsg,WPARAM wParam,LPARAM lParam,LRESULT & lResult);
 
 		virtual void OnScaleChanged(int nScale);
+		
+		virtual void OnRebuildFont();
 
 		virtual BOOL CreateCaret(HBITMAP pBmp,int nWid,int nHeight);
 

@@ -41,10 +41,11 @@ namespace SOUI
    * Describe   列表头项
    */
   typedef struct SHDITEM {
-	  SHDITEM():mask(0),cx(0, SLayoutSize::px),stFlag(ST_NULL),lParam(0),state(0),iOrder(0),bVisible(true){
+	  SHDITEM():mask(0),cx(0), bDpiAware(false),stFlag(ST_NULL),lParam(0),state(WndState_Normal),iOrder(0),bVisible(true){
 	  }
     UINT    mask; 
-    SLayoutSize     cx;
+    int     cx;
+	bool    bDpiAware;
 	STrText strText;
     SHDSORTFLAG stFlag;
     LPARAM  lParam; 
@@ -64,6 +65,10 @@ namespace SOUI
   {
       SOUI_CLASS_NAME(SHeaderCtrl, L"header")
 
+	  enum{
+		  MARGIN_ADJUST_ENABLE=4,
+		  MARGIN_ADJUST_DISABLE=2,
+	  };
   public:
       /**
        * SHeaderCtrl::SHeaderCtrl
@@ -218,6 +223,8 @@ namespace SOUI
        
 	  virtual HRESULT OnLanguageChanged();
 
+	  virtual void OnScaleChanged(int nScale);
+
 	  virtual BOOL OnRelayout(const CRect &rcWnd);
 	  /**
        * SHeaderCtrl::HitTest
@@ -323,7 +330,6 @@ namespace SOUI
           MSG_WM_MOUSELEAVE(OnMouseLeave)
           MSG_WM_ACTIVATEAPP(OnActivateApp)
           MSG_WM_DESTROY(OnDestroy)
-		  MESSAGE_HANDLER_EX(UM_SETSCALE, OnSetScale)
       SOUI_MSG_MAP_END()
 
       ISkinObj *    m_pSkinItem;  /**< 表头绘制Skin */
@@ -339,5 +345,7 @@ namespace SOUI
       DWORD           m_dwDragTo;  /**< 拖放目标 */    
       int             m_nAdjItemOldWidth;  /**< 保存被拖动项的原始宽度 */
       SArray<SHDITEM> m_arrItems; /**< 列表项集合 */
+	  int			  m_nScale;   /**< Current Scale */
+
   };
 }//end of namespace SOUI

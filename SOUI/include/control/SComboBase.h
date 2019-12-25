@@ -192,6 +192,9 @@ namespace SOUI
         */
         void CloseUp();
 
+		bool IsDropdown() const;
+
+		void SetDropdown(bool bDropdown);
     protected:
         /**
         * SComboBoxBase::GetDropDownOwner
@@ -384,8 +387,11 @@ namespace SOUI
 		void UpdateChildrenPosition();
 
         void OnKillFocus(SWND wndFocus);
+
+		LRESULT OnAttrDropDown(const SStringW & strValue, BOOL bLoading);
+
         SOUI_ATTRS_BEGIN()
-            ATTR_INT(L"dropDown", m_bDropdown, FALSE)
+            ATTR_CUSTOM(L"dropDown", OnAttrDropDown)
             ATTR_LAYOUTSIZE(L"dropHeight", m_nDropHeight, FALSE)
             ATTR_INT(L"curSel", m_iInitSel, FALSE)
             ATTR_SKIN(L"btnSkin", m_pSkinBtn, FALSE)
@@ -428,7 +434,7 @@ namespace SOUI
         DWORD     m_dwBtnState;  /**< 按钮状态      */
         ISkinObj *m_pSkinBtn;    /**< 按钮资源      */
 
-        BOOL m_bDropdown;        /**< 是否按下   */
+        bool m_bDropdown;        /**< Editable or dropdown only   */
         SLayoutSize  m_nDropHeight;      /**< 下拉框高度 */
         int  m_nAnimTime;        /**< 动画时间   */
         int  m_iInitSel;         /**< 默认选中索引 */
