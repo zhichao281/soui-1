@@ -7,8 +7,6 @@
 #include <gdialpha.h>
 #include <WinSCard.h>
 
-#pragma comment(lib,"imm32.lib")
-
 #ifndef LY_PER_INCH
 #define LY_PER_INCH 1440
 #endif
@@ -602,7 +600,6 @@ SRichEdit::SRichEdit()
     ,m_lAccelPos(-1)
     ,m_dwStyle(ES_LEFT|ES_AUTOHSCROLL)
     ,m_byDbcsLeadByte(0)
-	, m_hCurIMC(NULL)
 {
     m_pNcSkin = GETBUILTINSKIN(SKIN_SYS_BORDER);
 
@@ -724,12 +721,17 @@ void SRichEdit::OnSetFocus(SWND wndOld)
 
 	if (ES_PASSWORD & m_dwStyle || ES_NUMBER & m_dwStyle)
 	{
-		m_hCurIMC = ImmAssociateContext(GetContainer()->GetHostHwnd(), NULL);
+		GetContainer()->EnableIME(FALSE);
 	}
 }
 
 void SRichEdit::OnKillFocus(SWND wndFocus)
 {
+	if (ES_PASSWORD & m_dwStyle || ES_NUMBER & m_dwStyle)
+	{
+		GetContainer()->EnableIME(TRUE);
+	}
+
     __super::OnKillFocus(wndFocus);
     if(m_pTxtHost)
     {
@@ -739,10 +741,6 @@ void SRichEdit::OnKillFocus(SWND wndFocus)
         m_pTxtHost->TxShowCaret(FALSE);
     }
 
-	if (ES_PASSWORD & m_dwStyle || ES_NUMBER & m_dwStyle)
-	{
-		ImmAssociateContext(GetContainer()->GetHostHwnd(), m_hCurIMC);
-	}
 }
 
 void SRichEdit::OnTimer( char idEvent )
@@ -830,12 +828,6 @@ BOOL SRichEdit::SwndProc( UINT uMsg,WPARAM wParam,LPARAM lParam,LRESULT & lResul
 {
     if(m_pTxtHost && m_pTxtHost->GetTextService())
     {
-        if(uMsg == EM_GETRECT)
-        {
-            SetMsgHandled(TRUE);
-            GetClientRect((LPRECT)lParam);
-            return TRUE;
-        }
         if(m_pTxtHost->GetTextService()->TxSendMessage(uMsg,wParam,lParam,&lResult)==S_OK)
         {
             SetMsgHandled(TRUE);
@@ -1705,6 +1697,12 @@ HRESULT SRichEdit::OnAttrAutoSel(const SStringW & strValue,BOOL bLoading)
 {
 	m_fAutoSel = STRINGASBOOL(strValue);
 	return S_FALSE;
+}
+
+LRESULT SRichEdit::OnGetRect(UINT uMsg,WPARAM wp, LPARAM lp)
+{
+	GetClientRect((LPRECT)lp);
+	return TRUE;
 }
 
 

@@ -307,6 +307,8 @@ protected:// IContainer
 	virtual int GetScale() const;
 
 	virtual void OnCavasInvalidate(SWND swnd);
+
+	virtual void EnableIME(BOOL bEnable);
 protected://Swindow 虚方法
     virtual void BeforePaint(IRenderTarget *pRT, SPainter &painter);
     virtual void AfterPaint(IRenderTarget *pRT, SPainter &painter);
@@ -350,6 +352,7 @@ public://事件处理接口
         MESSAGE_RANGE_HANDLER_EX(WM_KEYFIRST, WM_KEYLAST, OnKeyEvent)
         MESSAGE_RANGE_HANDLER_EX(WM_IME_STARTCOMPOSITION,WM_IME_KEYLAST,OnKeyEvent)
         MESSAGE_HANDLER_EX(WM_IME_CHAR, OnKeyEvent)
+		MESSAGE_HANDLER_EX(WM_IME_REQUEST, OnKeyEvent)
         MESSAGE_HANDLER_EX(WM_ACTIVATEAPP,OnActivateApp)
         MSG_WM_SETCURSOR(OnSetCursor)
         MSG_WM_TIMER(OnTimer)
