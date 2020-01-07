@@ -226,7 +226,7 @@ SApplication::SApplication(IRenderFactory *pRendFactory,HINSTANCE hInst,LPCTSTR 
     m_strAppDir = appDir.AppDir();
     
     m_pMsgLoop = GetMsgLoopFactory()->CreateMsgLoop();
-
+	PushMsgLoop(m_pMsgLoop);
 	sysObjRegister.RegisterLayouts(this);
 	sysObjRegister.RegisterSkins(this);
 	sysObjRegister.RegisterWindows(this);
@@ -237,6 +237,7 @@ SApplication::SApplication(IRenderFactory *pRendFactory,HINSTANCE hInst,LPCTSTR 
 
 SApplication::~SApplication(void)
 {
+	PopMsgLoop();
     GetMsgLoopFactory()->DestoryMsgLoop(m_pMsgLoop);
     
 	SResProviderMgr::RemoveAll();
@@ -501,7 +502,8 @@ HWND SApplication::GetMainWnd()
 
 BOOL SApplication::SetMsgLoopFactory(IMsgLoopFactory *pMsgLoopFac)
 {
-    if(m_pMsgLoop->IsRunning()) return FALSE;
+	if(m_lstMsgLoop.GetCount()>0)
+		return FALSE;
     m_msgLoopFactory->DestoryMsgLoop(m_pMsgLoop);
     m_msgLoopFactory = pMsgLoopFac;
     m_pMsgLoop = m_msgLoopFactory->CreateMsgLoop();
@@ -598,6 +600,21 @@ void SApplication::SetAttrStorageFactory(IAttrStorageFactory * pAttrStorageFacto
 	m_pAttrStroageFactory = pAttrStorageFactory;
 }
 
+void SApplication::PushMsgLoop(SMessageLoop * pMsgLoop)
+{
+	m_lstMsgLoop.AddTail(pMsgLoop);
+}
+
+SMessageLoop * SApplication::PopMsgLoop()
+{
+	return m_lstMsgLoop.RemoveTail();
+}
+
+SMessageLoop * SApplication::GetMsgLoop()
+{
+	SASSERT(!m_lstMsgLoop.IsEmpty());
+	return m_lstMsgLoop.GetTail();
+}
 
 
 }//namespace SOUI
