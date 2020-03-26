@@ -422,6 +422,7 @@ LRESULT CMainDlg::OnInitDialog( HWND hWnd, LPARAM lParam )
 
 	//init soui 3.0 animation.
 	InitSoui3Animation();
+
     return 0;
 }
 
@@ -478,10 +479,6 @@ void CMainDlg::OnBtnMenu()
 {
     CPoint pt;
     GetCursorPos(&pt);
-    //使用模拟菜单
-//     SMenuEx menu;
-//     menu.LoadMenu(_T("smenuex:menuex_test"));
-//     menu.TrackPopupMenu(0,pt.x,pt.y,m_hWnd);
 
     //使用自绘菜单
     SMenu menu;
@@ -974,7 +971,7 @@ void CMainDlg::OnBtnTip()
 	{
 		CRect rc = pBtn->GetWindowRect();
 		ClientToScreen(&rc);
-		STipWnd::ShowTip(rc.right, rc.top, STipWnd::AT_LEFT_BOTTOM, _T("欢迎使用SOUI!\\n如果有好的demo欢迎发送截图给作者，SOUI2基于MIT协议,SOUI3使用自定义协议,商用收费!\\n启程软件"));
+		STipWnd::ShowTip(rc.right, rc.top, STipWnd::AT_LEFT_BOTTOM, _T("欢迎使用SOUI!\n如果有好的demo欢迎发送截图给作者，SOUI2基于MIT协议,SOUI3使用自定义协议,商用收费!\n启程软件"));
 	}
 }
 

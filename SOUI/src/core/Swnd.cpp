@@ -1004,6 +1004,8 @@ namespace SOUI
 		GETRENDERFACTORY->CreateRegion(&rgn);
 		CRect rcWnd = GetWindowRect();
 		CRect rcClient = SWindow::GetClientRect();
+		if(rcWnd == rcClient)
+			return;
 		rgn->CombineRect(&rcWnd,RGN_COPY);
 		rgn->CombineRect(&rcClient,RGN_DIFF);
 		if(m_clipRgn)
@@ -1122,18 +1124,25 @@ namespace SOUI
 		SMatrix oriMtx;
 		bool bMtx = _ApplyMatrix(pRT, oriMtx);
 
-
+		
 		CRect rcWnd = GetWindowRect();
 		CRect rcClient = GetClientRect();
-
-		CRect rcRgn = rcWnd;
-		if(pRgn && !pRgn->IsEmpty())
-		{
-			pRgn->GetRgnBox(&rcRgn);
+		float fMat[9];
+		pRT->GetTransform(fMat);
+		SMatrix curMtx(fMat);
+		BOOL bRgnInClient = FALSE;
+		if(curMtx.isIdentity())
+		{//detect client area only if matrix is identity.
+			CRect rcRgn = rcWnd;
+			if(pRgn && !pRgn->IsEmpty())
+			{
+				pRgn->GetRgnBox(&rcRgn);
+			}
+			CRect rcRgnUnionClient;
+			rcRgnUnionClient.UnionRect(rcClient,rcRgn);
+			bRgnInClient = rcRgnUnionClient == rcClient;
 		}
-		CRect rcRgnUnionClient;
-		rcRgnUnionClient.UnionRect(rcClient,rcRgn);
-		BOOL bRgnInClient = rcRgnUnionClient == rcClient;
+
 
 		IRenderTarget * pRTBackup;//backup current RT
 
@@ -1510,7 +1519,7 @@ namespace SOUI
 		CRect rcClient=GetClientRect();
 		if (!m_pBgSkin)
 		{
-			COLORREF crBg = GetStyle().m_crBg;
+			COLORREF crBg = GetBkgndColor();
 
 			if (CR_INVALID != crBg)
 			{
@@ -3048,9 +3057,18 @@ namespace SOUI
 		GetContainer()->UnregisterTimelineHandler(&m_animationHandler);
 	}
 
-	void SWindow::OnAnimationInvalidate()
+	void SWindow::OnAnimationInvalidate(bool bErase)
 	{
 		InvalidateRect(NULL);
+	}
+
+	void SWindow::OnAnimationUpdate()
+	{//do nothing.
+	}
+
+	COLORREF SWindow::GetBkgndColor() const
+	{
+		return GetStyle().m_crBg;
 	}
 
 	static SWindow * ICWND_NONE = (SWindow*)-2;
@@ -3121,10 +3139,10 @@ namespace SOUI
 		}
 		if (tm > 0)
 		{
-			m_pOwner->OnAnimationInvalidate();
+			m_pOwner->OnAnimationInvalidate(true);
 			pAni->AddRef();
 			bool bMore = pAni->getTransformation(STime::GetCurrentTimeMs(), m_transform);
-			m_pOwner->OnAnimationInvalidate();
+			m_pOwner->OnAnimationInvalidate(false);
 			if (!bMore)
 			{//animation stopped.
 				if(pAni->isFillEnabled() && pAni->getFillAfter())
@@ -3138,6 +3156,7 @@ namespace SOUI
 			}
 			pAni->Release();
 		}
+		m_pOwner->OnAnimationUpdate();
 		m_pOwner->Release();
 	}
 

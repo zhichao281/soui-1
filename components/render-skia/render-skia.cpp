@@ -578,7 +578,7 @@ namespace SOUI
     HRESULT SRenderTarget_Skia::DrawIconEx( int xLeft, int yTop, HICON hIcon, int cxWidth,int cyWidth,UINT diFlags )
     {
         HDC hdc=GetDC(0);
-        
+		
         ICONINFO ii={0};
         ::GetIconInfo(hIcon,&ii);
         SASSERT(ii.hbmColor);
@@ -921,7 +921,14 @@ namespace SOUI
             DeleteObject(hRgn);
         }
 
-        ::SetViewportOrgEx(m_hGetDC,(int)m_ptOrg.fX,(int)m_ptOrg.fY,NULL);
+		::SetGraphicsMode(m_hGetDC,GM_ADVANCED);
+		::SetViewportOrgEx(m_hGetDC,m_ptOrg.x(),m_ptOrg.y(),NULL);
+
+		SkMatrix mtx=m_SkCanvas->getTotalMatrix();
+		XFORM xForm = { mtx.get(IxForm::kMScaleX),mtx.get(IxForm::kMSkewY),
+			mtx.get(IxForm::kMSkewX),mtx.get(IxForm::kMScaleY),
+			mtx.get(IxForm::kMTransX),mtx.get(IxForm::kMTransY) };
+		::SetWorldTransform(m_hGetDC,&xForm);
 
         m_uGetDCFlag = uFlag;
         return m_hGetDC;
@@ -1238,7 +1245,6 @@ namespace SOUI
         skrc.offset(m_ptOrg);
         m_SkCanvas->drawArc(skrc,startAngle, sweepAngle,true,paint);
         return S_OK;
-
     }
 
     HRESULT SRenderTarget_Skia::SetTransform(const float matrix[9], float oldMatrix[9])
@@ -1426,6 +1432,13 @@ namespace SOUI
 				bRet = false;
 			break;
 		}
+		return bRet;
+	}
+
+	BOOL SRenderTarget_Skia::SetAntiAlias(BOOL bAntilias)
+	{
+		BOOL bRet = m_bAntiAlias;
+		m_bAntiAlias = bAntilias;
 		return bRet;
 	}
 
