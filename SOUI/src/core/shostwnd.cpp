@@ -137,6 +137,8 @@ SHostWnd::SHostWnd( LPCTSTR pszResName /*= NULL*/ )
 , m_szAppSetted(0,0)
 , m_nAutoSizing(0)
 , m_bResizing(false)
+, m_AniState(Ani_none)
+, m_dwThreadID(0)
 {
     m_msgMouse.message = 0;
     m_privateStylePool.Attach(new SStylePool);
@@ -192,8 +194,17 @@ BOOL SHostWnd::InitFromXml(pugi::xml_node xmlNode)
         SASSERT_FMTA(FALSE,"Null XML node");
         return FALSE;
     }
-    if(!SNativeWnd::IsWindow()) return FALSE;
-    
+    if(!SNativeWnd::IsWindow()) 
+		return FALSE;
+	if(m_AniState != Ani_none)
+	{
+		if(m_AniState&Ani_host)
+			StopHostAnimation();
+		if(m_AniState&Ani_win)
+			GetAnimation()->cancel();
+		SASSERT(m_AniState==Ani_none);
+	}
+
     //free old script module
     if(m_pScriptModule)
     {
@@ -524,6 +535,7 @@ BOOL SHostWnd::OnLoadLayoutFromResourceID(const SStringT &resId)
 
 int SHostWnd::OnCreate( LPCREATESTRUCT lpCreateStruct )
 {
+	m_dwThreadID = GetCurrentThreadId();
 	SHostMgr::getSingletonPtr()->AddHostMsgHandler(this);
 	UpdateAutoSizeCount(true);
     GETRENDERFACTORY->CreateRenderTarget(&m_memRT,0,0);
@@ -1242,7 +1254,7 @@ const SStringW & SHostWnd::GetTranslatorContext() const
 
 SMessageLoop * SHostWnd::GetMsgLoop()
 {
-    return SApplication::getSingletonPtr()->GetMsgLoop();
+    return SApplication::getSingletonPtr()->GetMsgLoop(m_dwThreadID);
 }
 
 #ifndef DISABLE_SWNDSPY
@@ -1472,9 +1484,18 @@ void SHostWnd::RequestRelayout(SWND hSource,BOOL bSourceResizable)
 //////////////////////////////////////////////////////////////////////////
 BOOL SHostWnd::DestroyWindow()
 {
+	if(m_AniState!=Ani_none)
+	{
+		if(m_AniState &Ani_host)
+			StopHostAnimation();
+		if(m_AniState & Ani_win)
+			GetAnimation()->cancel();
+		SASSERT(m_AniState==Ani_none);
+	}
 	if(m_aniExit)
 	{
 		StartAnimation(m_aniExit);
+		m_AniState |= Ani_win;
 		return TRUE;
 	}else
 	{
@@ -1514,7 +1535,10 @@ LRESULT SHostWnd::OnMenuExEvent(UINT uMsg,WPARAM wParam,LPARAM lParam)
 
 void SHostWnd::OnWindowPosChanging(LPWINDOWPOS lpWndPos)
 {//默认不处理该消息，同时防止系统处理该消息
-
+	if(lpWndPos->flags&SWP_SHOWWINDOW)
+	{
+		OnHostShowWindow(TRUE,0);
+	}
 }
 
 LRESULT SHostWnd::OnGetObject(UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -1592,25 +1616,16 @@ void SHostWnd::OnScaleChanged(int scale)
 	SWindow::InvalidateRect(NULL);
 }
 
-void SHostWnd::SetHostAnimation(IAnimation *pAni,bool startNow /*= true*/)
-{
-	m_hostAnimation = pAni;
-	if(m_hostAnimation)
-	{
-		if(startNow)
-		{
-			StartHostAnimation();
-		}
-	}
 
-}
-
-bool SHostWnd::StartHostAnimation()
+bool SHostWnd::StartHostAnimation(IAnimation *pAni)
 {
-	if(!m_hostAnimation)
-		return false;
+	SASSERT(pAni);
 	if(!IsWindow())
 		return false;
+	StopHostAnimation();
+
+	m_AniState |=Ani_host;
+	m_hostAnimation = pAni;
 	m_hostAnimation->startNow();
 
 	CRect rcWnd; GetNative()->GetWindowRect(&rcWnd);
@@ -1696,13 +1711,16 @@ void SHostWnd::OnHostShowWindow(BOOL bShow, UINT nStatus)
 {
 	if(bShow && m_aniEnter)
 	{
-		SLOG_INFO("OnHostShowWindow, set animation");
-		StartAnimation(m_aniEnter);
+		if(m_aniEnter)
+		{
+			StartAnimation(m_aniEnter);
+			m_AniState |= Ani_win;
+		}
 		OnNextFrame();
 	}
 }
 
-void SHostWnd::OnAnimationInvalidate(bool bErase)
+void SHostWnd::OnAnimationInvalidate(IAnimation *pAni,bool bErase)
 {
 	if(bErase)
 	{
@@ -1710,21 +1728,35 @@ void SHostWnd::OnAnimationInvalidate(bool bErase)
 		SNativeWnd::GetClientRect(&rcWnd);
 		m_memRT->ClearRect(rcWnd,0);
 	}
-	SWindow::OnAnimationInvalidate(bErase);
+	SWindow::OnAnimationInvalidate(pAni,bErase);
 }
 
-void SHostWnd::OnAnimationUpdate()
+void SHostWnd::OnAnimationUpdate(IAnimation *pAni)
 {
 	UpdateWindow();
 }
 
-void SHostWnd::OnAnimationStop()
+void SHostWnd::OnAnimationStop(IAnimation *pAni)
 {
-	SWindow::OnAnimationStop();
-	if(GetAnimation() == m_aniExit)
+	SWindow::OnAnimationStop(pAni);
+	if(pAni == m_aniEnter || pAni==m_aniExit)
+	{
+		m_AniState &=~Ani_win;
+	}
+	if(pAni == m_aniExit && m_AniState==Ani_none)
 	{
 		SNativeWnd::DestroyWindow();
 	}
+}
+
+void SHostWnd::OnHostAnimationStarted(IAnimation * pAni)
+{
+	
+}
+
+void SHostWnd::OnHostAnimationStoped(IAnimation * pAni)
+{
+	m_AniState&=~Ani_host;
 }
 
 

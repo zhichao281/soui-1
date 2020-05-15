@@ -29,7 +29,7 @@ namespace SOUI
     void SComboEdit::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
     {
         SWindow *pOwner = GetOwner();
-        if (pOwner && (nChar == VK_DOWN || nChar == VK_ESCAPE))
+        if (pOwner && (nChar == VK_DOWN || nChar==VK_UP || nChar == VK_ESCAPE))
         {
             pOwner->SSendMessage(WM_KEYDOWN, nChar, MAKELONG(nFlags, nRepCnt));
             return;
@@ -76,6 +76,8 @@ namespace SOUI
         ,m_pDropDownWnd(NULL)
         ,m_iInitSel(-1)
 		,m_bAutoFitDropBtn(TRUE)
+		,m_crCue(RGBA(0xcc,0xcc,0xcc,0xff))
+		,m_strCue(this)
     {
         m_bFocusable=TRUE;
 		m_style.SetAlign(SwndStyle::Align_Left);
@@ -119,7 +121,11 @@ namespace SOUI
     void SComboBase::GetDropBtnRect(LPRECT prc)
     {
         SIZE szBtn=m_pSkinBtn->GetSkinSize();
-        GetClientRect(prc);
+        CRect rcClient = GetClientRect();
+		CRect rcPadding = GetStyle().GetPadding();
+		rcClient.DeflateRect(rcPadding);
+		*prc = rcClient;
+
 		int nHei = prc->bottom - prc->top;
         prc->left= prc->right-nHei*szBtn.cx/szBtn.cy;
 		if (m_bAutoFitDropBtn) {
@@ -145,13 +151,25 @@ namespace SOUI
         SPainter painter;
 
         BeforePaint(pRT, painter);
-        if(GetCurSel() != -1 && m_bDropdown)
-        {
-            CRect rcText;
-            GetTextRect(rcText);
-            SStringT strText=GetWindowText();
-            DrawText(pRT,strText, strText.GetLength(), rcText, GetTextAlign());
-        }
+		if(m_bDropdown)
+		{
+			CRect rcText;
+			GetTextRect(rcText);
+			if(GetCurSel() != -1)
+			{
+				SStringT strText=GetWindowText();
+				DrawText(pRT,strText, strText.GetLength(), rcText, GetTextAlign());
+			}else
+			{
+				SStringT strCue = GetCueText();
+				if(!strCue.IsEmpty())
+				{
+					COLORREF crOld = pRT->SetTextColor(m_crCue);
+					DrawText(pRT,strCue,strCue.GetLength(),rcText,GetTextAlign());
+					pRT->SetTextColor(crOld);
+				}
+			}
+		}
         //draw focus rect
         if(IsFocused())
         {
@@ -425,21 +443,25 @@ namespace SOUI
             if(evtRe->iNotify == EN_CHANGE && !m_pEdit->GetEventSet()->isMuted())
             {
                 m_pEdit->GetEventSet()->setMutedState(true);
-                SetCurSel(-1);
+                SetCurSel(FindString(m_pEdit->GetWindowText()));
                 m_pEdit->GetEventSet()->setMutedState(false);
             }
         }
         return SWindow::FireEvent(evt);
     }
 
-    int SComboBase::FindString( LPCTSTR pszFind,int nAfter/*=0*/ )
+    int SComboBase::FindString( LPCTSTR pszFind,int iFindAfter/*=-1*/ )
     {
-        for(int i=nAfter;i<GetCount();i++)
-        {
-            SStringT strItem = GetLBText(i,TRUE);
-            if(strItem == pszFind) return i;
-        }
-        return -1;
+		if(iFindAfter<0) iFindAfter=-1;
+		int iStart = iFindAfter+1;
+		for(int i=0;i<GetCount();i++)
+		{
+			int iTarget = (i+iStart)%GetCount();
+			SStringT strItem = GetLBText(iTarget,TRUE);
+			if(strItem.StartsWith(pszFind))
+				return iTarget;
+		}
+		return -1;
     }
 
 	CSize SComboBase::GetDesiredSize(int nParentWid, int nParentHei)
@@ -508,7 +530,7 @@ namespace SOUI
     void SComboBase::SetWindowText(LPCTSTR pszText)
     {
         SWindow::SetWindowText(pszText);
-        SetCurSel(-1);
+        SetCurSel(FindString(pszText));
 		m_pEdit->SetWindowText(pszText);
 	}
 
@@ -532,10 +554,9 @@ namespace SOUI
 		SIZE szBtn = m_pSkinBtn->GetSkinSize();		
 		CRect rcPadding = GetStyle().GetPadding();
 		CRect rcEdit = GetClientRect();
-		int nHei = rcEdit.Height();
-		int nBtnWid = nHei *szBtn.cx/ szBtn.cy;
-		rcPadding.right += nBtnWid;
-		rcEdit.DeflateRect(rcPadding);
+		CRect rcBtn;
+		GetDropBtnRect(&rcBtn);
+		rcEdit.right = rcBtn.left;
 		m_pEdit->Move(rcEdit);
 	}
 	
@@ -579,6 +600,11 @@ namespace SOUI
 	{
 		m_bDropdown = bDropdown;
 		m_pEdit->SetVisible(!m_bDropdown, TRUE);
+	}
+
+	SStringT SComboBase::GetCueText(BOOL bRawText) const
+	{
+		return m_strCue.GetText(bRawText);
 	}
 
 }
